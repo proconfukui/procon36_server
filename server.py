@@ -1,26 +1,29 @@
 import socket
-import json
 import threading
+import time
+import requests
 
-# これまでに受け取った最も良い解を保存する変数
-best_solution = None
-# best_solutionを更新する際に複数のスレッドが同時にアクセスしないようにするためのロック
-lock = threading.Lock()
+match_info = None # 接続してきたクライアント全員に配布する試合情報
+best_solution = None # これまでに受け取った最も良い解
+lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 
-# 競技ルールに基づいて2つの解を比較する関数
+API_URL = "http://localhost:8080" # 競技サーバー用APIのURL
+TOKEN = "player1" # 認証トークン
+
+# 2つの解を比較して、良い方を返す
 def get_better_solution(sol1, sol2):
-    """
-    2つの解を比較し、より良い方とそのペア数を返す。
-    ルール: 1. ペア数が多い方 / 2. 手数が少ない方
-    """
     if sol1 is None:
         return sol2
     if sol2 is None:
         return sol1
 
     # ペア数を比較
-    sol1_pair_count = sol1.pop("pair_count")
-    sol2_pair_count = sol2.pop("pair_count")
+    sol1_pair_count = 0
+    if "pair_count" in sol1:
+        sol1_pair_count = sol1.pop("pair_count")
+    sol2_pair_count = 0
+    if "pair_count" in sol2:
+        sol2.pop("pair_count")
     if sol1_pair_count > sol2_pair_count:
         return (sol1, sol1_pair_count)
     if sol1_pair_count < sol2_pair_count:
@@ -32,9 +35,9 @@ def get_better_solution(sol1, sol2):
 
     return (sol2, sol2_pair_count)
 
-# 各クライアントからの接続を処理する関数
+# クライアントからの接続を処理する
 def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
+    print(f"新しい接続を確認：{addr}")
     try:
         # クライアントからデータを受信 (1024バイトずつ)
         data = b""
@@ -46,8 +49,8 @@ def handle_client(conn, addr):
 
         if data:
             # 受信したデータをJSONとしてパース
-            solution = json.loads(data.decode('utf-8'))
-            print(f"Received solution from {addr}")
+            solution = json.loads(data.decode("utf-8"))
+            print(f"{addr} から解を受信")
 
             # グローバル変数へのアクセスをロック
             with lock:
@@ -57,34 +60,82 @@ def handle_client(conn, addr):
 
                 if new_best is not best_solution:
                     best_solution = new_best
-                    print("--- [UPDATE] New best solution found! ---")
-                    print(f"  Pairs: {pair_count}, Rotations: {len(best_solution.get('ops', []))}")
-                    # TODO: ここに本番サーバーへ提出する処理を追加する
-                    # submit_to_official_server(best_solution)
-
+                    print(f"提出解を更新（ペア数：{pair_count}、手数：{len(best_solution.get('ops', []))}）")
+                    print("回答を提出...")
+                    # 本番サーバーへ提出
+                    responce = requests.post(f"{API_URL}/match", json=best_solution)
+                    match responce.status_code:
+                        case 200:
+                            json = responce.json()
+                            revision = json.get("revision", -1)
+                            print(f"回答が受理された。受理番号：{revision}")
+                        case 400:
+                            print("エラー：リクエストの内容が不正")
+                        case 401:
+                            print("エラー：トークンが指定されていないか不正")
+                        case 403:
+                            print("エラー：競技時間外にアクセス")
+                        case _:
+                            print("エラー：予期しないエラー")
     except Exception as e:
-        print(f"[ERROR] {e}")
+        print(f"エラー：{e}")
     finally:
         conn.close()
-        print(f"[DISCONNECTED] {addr} disconnected.")
+        print(f"接続を切断：{addr}")
 
+# 競技サーバーから試合情報を取得し、グローバル変数に格納する
+def fetch_match_info():
+    global match_info
+    while True:
+        try:
+            print(f"¥{API_URL}/match から試合情報を取得...")
+            # 競技サーバーの /match エンドポイントにGETリクエストを送信
+            response = requests.get(f"{API_URL}/match")
+            response.raise_for_status() # エラーがあれば例外を発生させる
+
+            data = response.json()
+            
+            with lock:
+                match_info = data
+            
+            print("試合情報の取得に成功")
+            # 試合開始時刻まで待機
+            wait_for_match_start(match_info)
+            return
+
+        except requests.exceptions.RequestException as e:
+            print(f"試合情報の取得に失敗：{e}")
+            print("5秒後に再試行...")
+            time.sleep(5)
+
+# 試合開始時刻まで待機する
+def wait_for_match_start(info):
+    start_at_unix = info.get("startsAt", 0)
+    current_unix = int(time.time())
+    
+    wait_time = start_at_unix - current_unix
+    
+    if wait_time > 0:
+        print(f"試合開始まで{wait_time}秒...")
+        time.sleep(wait_time)
+    
+    print("試合開始！")
 
 def main():
-    HOST = '0.0.0.0'  # すべてのネットワークインターフェースから接続を待ち受ける
-    PORT = 9999       # 任意のポート番号
+    # サーバー起動時に一度だけ試合情報を取得
+    fetch_match_info()
 
+    HOST = "0.0.0.0"
+    PORT = 9999
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, PORT))
     server.listen()
-    print(f"[LISTENING] Server is listening on {HOST}:{PORT}")
+    print(f"チームのサーバーが {HOST}:{PORT} でリスニング中")
 
     while True:
-        # クライアントからの接続を待つ
         conn, addr = server.accept()
-        # 接続ごとに新しいスレッドを作成して処理
         thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
-        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
 
 if __name__ == "__main__":
     main()

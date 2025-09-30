@@ -3,17 +3,22 @@ import json
 import time
 import random
 
-# ★★★ サーバーPCのIPアドレスをここに入力 ★★★
-SERVER_HOST = '192.168.1.10' # 例: サーバー役のPCのIPアドレス
+# サーバーPCのIPアドレスとポート
+# TODO: 正式なものに書き換える
+SERVER_HOST = "192.168.1.10"
 SERVER_PORT = 9999
 
-def run_solver():
+def run_solver(match_info):
     """
     計算アルゴリズムを実行して解を生成するダミー関数。
     TODO: この関数を、実際の計算プログラムを呼び出して
           その標準出力を受け取る処理に置き換える。
     """
-    print("Running solver...")
+    print("ソルバーを実行中...")
+
+    # 計算に時間がかかったと仮定
+    time.sleep(5)
+    
     # ダミーの解を生成 (ペア数と回転数はランダム)
     num_pairs = random.randint(5, 10)
     num_rotations = random.randint(50, 100)
@@ -29,29 +34,39 @@ def run_solver():
             )
         ]
     }
-    print(f"Solver finished. Found a solution with {num_pairs} pairs and {num_rotations} rotations.")
+    print(f"ソルバー実行完了（ペア数：{num_pairs}、手数：{num_rotations}）")
     return solution
 
-def send_solution_to_server(solution):
-    """サーバーに解を送信する"""
+def main() -> None:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            print(f"Connecting to server {SERVER_HOST}:{SERVER_PORT}...")
+            # サーバーに接続
+            print(f"{SERVER_HOST}:{SERVER_PORT}に接続中...")
             s.connect((SERVER_HOST, SERVER_PORT))
+            print("接続成功。問題受信を待機...")
             
-            # 辞書をJSON形式の文字列に変換し、バイトデータにエンコードして送信
-            s.sendall(json.dumps(solution).encode('utf-8'))
-            print("Solution sent successfully.")
+            # サーバーから問題を受け取る
+            data = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            if not data:
+                print("エラー：サーバーから受信ができませんでした")
+                return
+            match_info = json.loads(data.decode("utf-8"))
+            print("問題受信に成功")
+
+            # ソルバーを実行
+            solution = run_solver(match_info)
+            
+            # 解をサーバーに送信
+            print("解をサーバーに送信中...")
+            s.sendall(json.dumps(solution).encode("utf-8"))
+            print("解をサーバーに送信完了")
     except Exception as e:
-        print(f"[ERROR] Failed to send solution: {e}")
-
-
-def main():
-    # 30秒ごとに新しい解を見つけたと仮定してサーバーに送り続けるループ
-    while True:
-        solution = run_solver()
-        send_solution_to_server(solution)
-        time.sleep(30) # 30秒待機
+        print(f"エラー：{e}")
 
 if __name__ == "__main__":
     main()
