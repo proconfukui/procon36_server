@@ -7,7 +7,7 @@ match_info = None # 接続してきたクライアント全員に配布する試
 best_solution = None # これまでに受け取った最も良い解
 lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 
-API_URL = "http://localhost:8080" # 競技サーバー用APIのURL
+API_URL = "http://192.168.11.32:3000" # 競技サーバー用APIのURL
 TOKEN = "player1" # 認証トークン
 
 # 2つの解を比較して、良い方を返す
@@ -62,8 +62,9 @@ def handle_client(conn, addr):
                     best_solution = new_best
                     print(f"提出解を更新（ペア数：{pair_count}、手数：{len(best_solution.get('ops', []))}）")
                     print("回答を提出...")
-                    # 本番サーバーへ提出
-                    responce = requests.post(f"{API_URL}/match", json=best_solution)
+                    # 本番サーバーへ提出（認証付き）
+                    headers = {"Procon-Token": TOKEN}
+                    responce = requests.post(f"{API_URL}/match", json=best_solution, headers=headers)
                     match responce.status_code:
                         case 200:
                             json = responce.json()
@@ -88,9 +89,10 @@ def fetch_match_info():
     global match_info
     while True:
         try:
-            print(f"¥{API_URL}/match から試合情報を取得...")
-            # 競技サーバーの /match エンドポイントにGETリクエストを送信
-            response = requests.get(f"{API_URL}/match")
+            print(f"{API_URL}/match から試合情報を取得...")
+            # 競技サーバーの /match エンドポイントにGETリクエストを送信（認証付き）
+            headers = {"Procon-Token": TOKEN}
+            response = requests.get(f"{API_URL}/match", headers=headers)
             response.raise_for_status() # エラーがあれば例外を発生させる
 
             data = response.json()
