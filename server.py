@@ -2,10 +2,14 @@ import socket
 import threading
 import time
 import requests
+import json
+import signal
+import sys
 
 match_info = None # 接続してきたクライアント全員に配布する試合情報
 best_solution = None # これまでに受け取った最も良い解
 lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
+server_socket = None # サーバーソケットのグローバル参照
 
 API_URL = "http://192.168.11.32:3000" # 競技サーバー用APIのURL
 TOKEN = "player1" # 認証トークン
@@ -39,6 +43,19 @@ def get_better_solution(sol1, sol2):
 def handle_client(conn, addr):
     print(f"新しい接続を確認：{addr}")
     try:
+        # まず試合情報をクライアントに送信
+        with lock:
+            if match_info:
+                match_data = json.dumps(match_info).encode("utf-8")
+                conn.sendall(match_data)
+                print(f"{addr} に試合情報を送信")
+            else:
+                print("エラー：試合情報が利用できません")
+                return
+        
+        # 接続を閉じてクライアントに送信完了を通知
+        conn.shutdown(socket.SHUT_WR)
+        
         # クライアントからデータを受信 (1024バイトずつ)
         data = b""
         while True:
@@ -64,7 +81,7 @@ def handle_client(conn, addr):
                     print("回答を提出...")
                     # 本番サーバーへ提出（認証付き）
                     headers = {"Procon-Token": TOKEN}
-                    responce = requests.post(f"{API_URL}/match", json=best_solution, headers=headers)
+                    responce = requests.post(f"{API_URL}/", json=best_solution, headers=headers)
                     match responce.status_code:
                         case 200:
                             json = responce.json()
@@ -89,10 +106,10 @@ def fetch_match_info():
     global match_info
     while True:
         try:
-            print(f"{API_URL}/match から試合情報を取得...")
-            # 競技サーバーの /match エンドポイントにGETリクエストを送信（認証付き）
+            print(f"{API_URL}/ から試合情報を取得...")
+            # 競技サーバーの / エンドポイントにGETリクエストを送信（認証付き）
             headers = {"Procon-Token": TOKEN}
-            response = requests.get(f"{API_URL}/match", headers=headers)
+            response = requests.get(f"{API_URL}/", headers=headers)
             response.raise_for_status() # エラーがあれば例外を発生させる
 
             data = response.json()
@@ -123,21 +140,53 @@ def wait_for_match_start(info):
     
     print("試合開始！")
 
+# シグナルハンドラ（Ctrl+Cなどで終了時にソケットを適切に閉じる）
+def signal_handler(sig, frame):
+    global server_socket
+    print("\nサーバーを終了しています...")
+    if server_socket:
+        server_socket.close()
+        print("サーバーソケットを閉じました")
+    sys.exit(0)
+
 def main():
+    global server_socket
+    
+    # シグナルハンドラを登録（Ctrl+C、SIGTERMなど）
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     # サーバー起動時に一度だけ試合情報を取得
     fetch_match_info()
 
-    HOST = "0.0.0.0"
+    HOST = "0.0.0.0"  # 全てのインターフェースでリスニング
     PORT = 9999
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
-    server.listen()
-    print(f"チームのサーバーが {HOST}:{PORT} でリスニング中")
+    
+    try:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # ソケットの再利用を許可（Address already in useエラーを防ぐ）
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((HOST, PORT))
+        server_socket.listen()
+        print(f"チームのサーバーが {HOST}:{PORT} でリスニング中")
 
-    while True:
-        conn, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
-        thread.start()
+        while True:
+            try:
+                conn, addr = server_socket.accept()
+                thread = threading.Thread(target=handle_client, args=(conn, addr))
+                thread.daemon = True  # メインスレッド終了時に子スレッドも終了
+                thread.start()
+            except OSError:
+                # ソケットが閉じられた場合（正常終了）
+                break
+                
+    except Exception as e:
+        print(f"サーバーエラー: {e}")
+    finally:
+        # リソースのクリーンアップ
+        if server_socket:
+            server_socket.close()
+            print("サーバーソケットを閉じました")
 
 if __name__ == "__main__":
     main()
