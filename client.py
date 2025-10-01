@@ -5,7 +5,7 @@ import random
 
 # サーバーPCのIPアドレスとポート
 # TODO: 正式なものに書き換える
-SERVER_HOST = "192.168.1.10"
+SERVER_HOST = "172.28.245.32"  # サーバーの実際のIPアドレス
 SERVER_PORT = 9999
 
 def run_solver(match_info):
