@@ -2,13 +2,14 @@ import socket
 import json
 import time
 import random
+from typing import Dict, Any
 
 # サーバーPCのIPアドレスとポート
 # TODO: 正式なものに書き換える
-SERVER_HOST = "192.168.11.32"  # サーバーの実際のIPアドレス
-SERVER_PORT = 8888
+SERVER_HOST: str = "192.168.11.32"  # サーバーの実際のIPアドレス
+SERVER_PORT: int = 8888
 
-def run_solver(match_info):
+def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
     """
     計算アルゴリズムを実行して解を生成するダミー関数。
     TODO: この関数を、実際の計算プログラムを呼び出して
@@ -20,10 +21,10 @@ def run_solver(match_info):
     time.sleep(5)
     
     # ダミーの解を生成 (ペア数と回転数はランダム)
-    num_pairs = random.randint(5, 10)
-    num_rotations = random.randint(50, 100)
+    num_pairs: int = random.randint(5, 10)
+    num_rotations: int = random.randint(50, 100)
 
-    solution = {
+    solution: Dict[str, Any] = {
         "pair_count": num_pairs, # 解の比較用。サーバー側で取り除かれる
         "ops": [
             {"x": x, "y": y, "n": n}
@@ -42,20 +43,20 @@ def main() -> None:
             print("接続成功。問題受信を待機...")
             
             # サーバーから問題を受け取る
-            data = b""
+            data: bytes = b""
             while True:
-                chunk = s.recv(4096)
+                chunk: bytes = s.recv(4096)
                 if not chunk:
                     break
                 data += chunk
             if not data:
                 print("エラー：サーバーから受信ができませんでした")
                 return
-            match_info = json.loads(data.decode("utf-8"))
+            match_info: Dict[str, Any] = json.loads(data.decode("utf-8"))
             print("問題受信に成功")
 
             # ソルバーを実行
-            solution = run_solver(match_info)
+            solution: Dict[str, Any] = run_solver(match_info)
             
             # 解をサーバーに送信
             print("解をサーバーに送信中...")
