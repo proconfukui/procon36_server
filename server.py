@@ -4,6 +4,7 @@ import time
 import requests
 import signal
 import sys
+import json
 
 match_info = None # 接続してきたクライアント全員に配布する試合情報
 best_solution = None # これまでに受け取った最も良い解
@@ -83,8 +84,8 @@ def handle_client(conn, addr):
                     responce = requests.post(f"{API_URL}/", json=best_solution, headers=headers)
                     match responce.status_code:
                         case 200:
-                            json = responce.json()
-                            revision = json.get("revision", -1)
+                            response_data = responce.json()
+                            revision = response_data.get("revision", -1)
                             print(f"回答が受理された。受理番号：{revision}")
                         case 400:
                             print("エラー：リクエストの内容が不正")
