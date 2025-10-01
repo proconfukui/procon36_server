@@ -2,7 +2,6 @@ import socket
 import threading
 import time
 import requests
-import json
 import signal
 import sys
 
@@ -11,7 +10,7 @@ best_solution = None # これまでに受け取った最も良い解
 lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 server_socket = None # サーバーソケットのグローバル参照
 
-API_URL = "http://192.168.11.32:3000" # 競技サーバー用APIのURL
+API_URL = "http://localhost:3000" # 競技サーバー用APIのURL
 TOKEN = "player1" # 認証トークン
 
 # 2つの解を比較して、良い方を返す
@@ -160,7 +159,7 @@ def main():
     fetch_match_info()
 
     HOST = "0.0.0.0"  # 全てのインターフェースでリスニング
-    PORT = 9999
+    PORT = 8888  # ポート9999が使用中のため8888に変更
     
     try:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
