@@ -5,8 +5,8 @@ import random
 
 # サーバーPCのIPアドレスとポート
 # TODO: 正式なものに書き換える
-SERVER_HOST = "172.28.245.32"  # サーバーの実際のIPアドレス
-SERVER_PORT = 9999
+SERVER_HOST = "192.168.11.32"  # サーバーの実際のIPアドレス
+SERVER_PORT = 8888
 
 def run_solver(match_info):
     """
@@ -27,11 +27,7 @@ def run_solver(match_info):
         "pair_count": num_pairs, # 解の比較用。サーバー側で取り除かれる
         "ops": [
             {"x": x, "y": y, "n": n}
-            for x, y, n in zip(
-                random.choices(range(10), k=num_rotations),
-                random.choices(range(10), k=num_rotations),
-                random.choices(range(10), k=num_rotations)
-            )
+            for x, y, n in zip([0] * num_rotations, [0] * num_rotations, [2] * num_rotations)
         ]
     }
     print(f"ソルバー実行完了（ペア数：{num_pairs}、手数：{num_rotations}）")
