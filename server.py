@@ -160,7 +160,7 @@ def wait_for_match_start(info: Dict[str, Any]) -> None:
         print(f"試合開始まで{wait_time}秒...")
         time.sleep(wait_time)
     
-    print("試合開始！")
+    print("試合開始！！")
 
 # シグナルハンドラ（Ctrl+Cなどで終了時にソケットを適切に閉じる）
 def signal_handler(sig: int, frame: Optional[types.FrameType]) -> None:
