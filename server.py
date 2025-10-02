@@ -7,11 +7,15 @@ import sys
 import json
 from typing import Dict, Any, Optional, Tuple, Union
 import types
+import copy
 
 match_info: Optional[Dict[str, Any]] = None # 接続してきたクライアント全員に配布する試合情報
 best_solution: Optional[Dict[str, Any]] = None # これまでに受け取った最も良い解
+best_pair_count: int = 0 # 最も良い解のペア数
+best_ops_count: int = 0 # 最も良い解の手数
 lock: threading.Lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 server_socket: Optional[socket.socket] = None # サーバーソケットのグローバル参照
+new_best_solution_event = threading.Event() # 新しい最良解が見つかったことをメインスレッドに知らせるためのイベント
 
 API_URL: str = "http://localhost:3000" # 競技サーバー用APIのURL
 TOKEN: str = "player1" # 認証トークン
@@ -83,25 +87,10 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
 
                 if new_best is not best_solution:
                     best_solution = new_best
-                    ops_count = len(best_solution.get('ops', [])) if best_solution else 0
-                    print(f"提出解を更新（ペア数：{pair_count}、手数：{ops_count}）")
-                    print("回答を提出...")
-                    # 本番サーバーへ提出（認証付き）
-                    headers: Dict[str, str] = {"Procon-Token": TOKEN}
-                    responce: requests.Response = requests.post(f"{API_URL}/", json=best_solution, headers=headers)
-                    match responce.status_code:
-                        case 200:
-                            response_data: Dict[str, Any] = responce.json()
-                            revision: int = response_data.get("revision", -1)
-                            print(f"回答が受理された。受理番号：{revision}")
-                        case 400:
-                            print("エラー：リクエストの内容が不正")
-                        case 401:
-                            print("エラー：トークンが指定されていないか不正")
-                        case 403:
-                            print("エラー：競技時間外にアクセス")
-                        case _:
-                            print("エラー：予期しないエラー")
+                    best_pair_count = pair_count
+                    best_ops_count = len(best_solution.get('ops', [])) if best_solution else 0
+                    # メインスレッドに新しい最良解が見つかったことを通知
+                    new_best_solution_event.set()
     except Exception as e:
         print(f"エラー：{e}")
     finally:
@@ -134,6 +123,29 @@ def fetch_match_info() -> None:
             print("5秒後に再試行...")
             time.sleep(5)
 
+# 人間が承認した解を競技サーバーに提出する（認証付き）
+def submit_to_official_server(solution_to_submit):
+    if not match_info:
+        print("エラー：試合情報が利用できません")
+        return
+    
+    print("回答を提出...")
+    headers: Dict[str, str] = {"Procon-Token": TOKEN}
+    responce: requests.Response = requests.post(f"{API_URL}/", json=solution_to_submit, headers=headers)
+    match responce.status_code:
+        case 200:
+            response_data: Dict[str, Any] = responce.json()
+            revision: int = response_data.get("revision", -1)
+            print(f"回答が受理された（受理番号：{revision}）")
+        case 400:
+            print("エラー：リクエストの内容が不正")
+        case 401:
+            print("エラー：トークンが指定されていないか不正")
+        case 403:
+            print("エラー：競技時間外にアクセス")
+        case _:
+            print("エラー：予期しないエラー")
+
 # 試合開始時刻まで待機する
 def wait_for_match_start(info: Dict[str, Any]) -> None:
     start_at_unix: int = info.get("startsAt", 0)
@@ -156,16 +168,8 @@ def signal_handler(sig: int, frame: Optional[types.FrameType]) -> None:
         print("サーバーソケットを閉じました")
     sys.exit(0)
 
-def main() -> None:
-    global server_socket
-    
-    # シグナルハンドラを登録（Ctrl+C、SIGTERMなど）
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # サーバー起動時に一度だけ試合情報を取得
-    fetch_match_info()
-
+# クライアントからの接続を待ち受けるループを動かすスレッド
+def start_server_listener():
     HOST: str = "0.0.0.0"  # 全てのインターフェースでリスニング
     PORT: int = 8888  # ポート9999が使用中のため8888に変更
     
@@ -196,6 +200,50 @@ def main() -> None:
         if server_socket:
             server_socket.close()
             print("サーバーソケットを閉じました")
+
+def main() -> None:
+    global server_socket
+    
+    # シグナルハンドラを登録（Ctrl+C、SIGTERMなど）
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # サーバー起動時に一度だけ試合情報を取得
+    fetch_match_info()
+    if not match_info:
+        print("試合情報の取得に失敗したため、サーバーを起動できません")
+        return
+    
+    # サーバーの待ち受け処理をバックグラウンドで開始
+    listener_thread = threading.Thread(target=start_server_listener, daemon=True)
+    listener_thread.start()
+
+    while True:
+        # 新しい最良解が見つかるまで待機
+        new_best_solution_event.wait() 
+        
+        # イベントをクリアして次の通知を待てるようにする
+        new_best_solution_event.clear()
+
+        with lock:
+            # 提出中にbest_solutionが更新されないようにディープコピーする
+            solution_for_submission = copy.deepcopy(best_solution)
+
+        print(f"提出候補解を受信：ペア数={best_pair_count}、手数={best_ops_count}）")
+        while True:
+            try:
+                user_input = input("この解を提出しますか？ (y/n): ").lower()
+                if user_input in ['y', 'yes']:
+                    submit_to_official_server(solution_for_submission)
+                    break
+                elif user_input in ['n', 'no']:
+                    print("提出キャンセル。次の解を待機します...")
+                    break
+                else:
+                    print("'y'か'n'を入力してください")
+            except EOFError: # Ctrl+Dなどで入力が終わった場合
+                print("\nプログラムを終了...")
+                return
 
 if __name__ == "__main__":
     main()
