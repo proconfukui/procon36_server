@@ -82,9 +82,9 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
                 result = get_better_solution(best_solution, solution)
                 if isinstance(result, tuple):
                     new_best, pair_count = result
+                    ops_count = len(new_best.get('ops', [])) if new_best else 0
                 else:
                     new_best, pair_count = result, 0
-                ops_count = len(best_solution.get('ops', [])) if best_solution else 0
 
                 if new_best is not best_solution:
                     best_solution = new_best
