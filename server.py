@@ -77,20 +77,23 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
 
             # グローバル変数へのアクセスをロック
             with lock:
-                global best_solution
+                global best_solution, best_pair_count, best_ops_count
                 # 現在の最良解と比較
                 result = get_better_solution(best_solution, solution)
                 if isinstance(result, tuple):
                     new_best, pair_count = result
                 else:
                     new_best, pair_count = result, 0
+                ops_count = len(best_solution.get('ops', [])) if best_solution else 0
 
                 if new_best is not best_solution:
                     best_solution = new_best
                     best_pair_count = pair_count
-                    best_ops_count = len(best_solution.get('ops', [])) if best_solution else 0
+                    best_ops_count = ops_count
                     # メインスレッドに新しい最良解が見つかったことを通知
                     new_best_solution_event.set()
+                else:
+                    print(f"{addr} の解は最良解ではありません（ペア数：{pair_count}、手数：{ops_count}）")
     except Exception as e:
         print(f"エラー：{e}")
     finally:
