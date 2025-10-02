@@ -232,7 +232,8 @@ def main() -> None:
             # 提出中にbest_solutionが更新されないようにディープコピーする
             solution_for_submission = copy.deepcopy(best_solution)
 
-        print(f"提出候補解を受信：ペア数={best_pair_count}、手数={best_ops_count}）")
+        global best_pair_count, best_ops_count
+        print(f"新しい最良解が見つかりました！（ペア数={best_pair_count}、手数={best_ops_count}）")
         while True:
             try:
                 user_input = input("この解を提出しますか？ (y/n): ").lower()
