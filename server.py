@@ -23,22 +23,17 @@ TOKEN: str = "player1" # 認証トークン
 # 2つの解を比較して、良い方を返す
 def get_better_solution(sol1: Optional[Dict[str, Any]], sol2: Optional[Dict[str, Any]]) -> Union[Optional[Dict[str, Any]], Tuple[Dict[str, Any], int]]:
     if sol1 is None:
-        sol2_pair_count = sol2.pop("pair_count") if "pair_count" in sol2 else 0
+        sol2_pair_count: int = sol2.pop("pair_count") if "pair_count" in sol2 else 0
         print(f"比較中: 解2のペア数={sol2_pair_count}")
         return (sol2, sol2_pair_count)
     if sol2 is None:
-        sol1_pair_count = sol1.pop("pair_count") if "pair_count" in sol1 else 0
+        sol1_pair_count: int = sol1.pop("pair_count") if "pair_count" in sol1 else 0
         print(f"比較中: 解1のペア数={sol1_pair_count}")
         return (sol1, sol1_pair_count)
 
     # ペア数を比較
-    sol1_pair_count: int = 0
-    if "pair_count" in sol1:
-        sol1_pair_count = sol1.pop("pair_count")
-    sol2_pair_count: int = 0
-    if "pair_count" in sol2:
-        sol2.pop("pair_count")
-
+    sol1_pair_count: int = sol1.pop("pair_count") if "pair_count" in sol1 else 0
+    sol2_pair_count: int = sol2.pop("pair_count") if "pair_count" in sol2 else 0
     print(f"比較中: 解1のペア数={sol1_pair_count}, 解2のペア数={sol2_pair_count}")
     if sol1_pair_count > sol2_pair_count:
         return (sol1, sol1_pair_count)
