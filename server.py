@@ -11,8 +11,6 @@ import copy
 
 match_info: Optional[Dict[str, Any]] = None # 接続してきたクライアント全員に配布する試合情報
 best_solution: Optional[Dict[str, Any]] = None # これまでに受け取った最も良い解
-best_pair_count: int = 0 # 最も良い解のペア数
-best_ops_count: int = 0 # 最も良い解の手数
 lock: threading.Lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 server_socket: Optional[socket.socket] = None # サーバーソケットのグローバル参照
 new_best_solution_event = threading.Event() # 新しい最良解が見つかったことをメインスレッドに知らせるためのイベント
@@ -77,25 +75,23 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
 
             # グローバル変数へのアクセスをロック
             with lock:
-                global best_solution, best_pair_count, best_ops_count
+                global best_solution
                 # 現在の最良解と比較
                 result = get_better_solution(best_solution, solution)
-                ops_count: int = 0
+                pair_count: int = 0
                 if isinstance(result, tuple):
                     new_best, pair_count = result
-                    if new_best:
-                        ops_count = len(new_best.get('ops', []))
                 else:
                     new_best, pair_count = result, 0
 
                 if new_best is not best_solution:
                     best_solution = new_best
-                    best_pair_count = pair_count
-                    best_ops_count = ops_count
+                    ops_count = len(new_best.get('ops', [])) if new_best else 0
+                    print(f"新しい最良解が見つかりました！（ペア数={pair_count}、手数={ops_count}）")
                     # メインスレッドに新しい最良解が見つかったことを通知
                     new_best_solution_event.set()
                 else:
-                    print(f"{addr} の解は最良解ではありません（ペア数：{pair_count}、手数：{ops_count}）")
+                    print(f"{addr} の解は最良解ではありません")
     except Exception as e:
         print(f"エラー：{e}")
     finally:
@@ -207,7 +203,7 @@ def start_server_listener():
             print("サーバーソケットを閉じました")
 
 def main() -> None:
-    global server_socket, match_info, best_solution, best_pair_count, best_ops_count
+    global server_socket, match_info, best_solution
     
     # シグナルハンドラを登録（Ctrl+C、SIGTERMなど）
     signal.signal(signal.SIGINT, signal_handler)
@@ -234,7 +230,6 @@ def main() -> None:
             # 提出中にbest_solutionが更新されないようにディープコピーする
             solution_for_submission = copy.deepcopy(best_solution)
 
-        print(f"新しい最良解が見つかりました！（ペア数={best_pair_count}、手数={best_ops_count}）")
         while True:
             try:
                 user_input = input("この解を提出しますか？ (y/n): ").lower()
