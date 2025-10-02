@@ -205,7 +205,7 @@ def start_server_listener():
             print("サーバーソケットを閉じました")
 
 def main() -> None:
-    global server_socket
+    global server_socket, match_info, best_solution, best_pair_count, best_ops_count
     
     # シグナルハンドラを登録（Ctrl+C、SIGTERMなど）
     signal.signal(signal.SIGINT, signal_handler)
@@ -232,7 +232,6 @@ def main() -> None:
             # 提出中にbest_solutionが更新されないようにディープコピーする
             solution_for_submission = copy.deepcopy(best_solution)
 
-        global best_pair_count, best_ops_count
         print(f"新しい最良解が見つかりました！（ペア数={best_pair_count}、手数={best_ops_count}）")
         while True:
             try:
