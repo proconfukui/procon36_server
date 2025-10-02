@@ -11,6 +11,8 @@ import copy
 
 match_info: Optional[Dict[str, Any]] = None # 接続してきたクライアント全員に配布する試合情報
 best_solution: Optional[Dict[str, Any]] = None # これまでに受け取った最も良い解
+best_pair_count: int = 0 # 最も良い解のペア数
+best_ops_count: int = 0 # 最も良い解の手数
 lock: threading.Lock = threading.Lock() # best_solutionやmatch_infoを安全に更新するためのロック
 server_socket: Optional[socket.socket] = None # サーバーソケットのグローバル参照
 new_best_solution_event = threading.Event() # 新しい最良解が見つかったことをメインスレッドに知らせるためのイベント
@@ -75,21 +77,25 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
 
             # グローバル変数へのアクセスをロック
             with lock:
-                global best_solution
+                global best_solution, best_pair_count, best_ops_count
                 # 現在の最良解と比較
                 result = get_better_solution(best_solution, solution)
                 pair_count: int = 0
                 if isinstance(result, tuple):
                     new_best, pair_count = result
+                    print(f"pair_count: {pair_count}")
                 else:
                     new_best, pair_count = result, 0
+                ops_count = len(new_best.get('ops', [])) if new_best else 0
+                print(f"pair_count: {pair_count}")
 
                 if new_best is not best_solution:
                     best_solution = new_best
-                    ops_count = len(new_best.get('ops', [])) if new_best else 0
+                    best_pair_count = pair_count
+                    best_ops_count = ops_count
+                    print(f"\r{' '*80}\r", end='') # 現在の行をクリア
                     print(f"新しい最良解が見つかりました！（ペア数={pair_count}、手数={ops_count}）")
-                    # メインスレッドに新しい最良解が見つかったことを通知
-                    new_best_solution_event.set()
+                    print("コマンド > ", end='', flush=True) # プロンプトを再表示
                 else:
                     print(f"{addr} の解は最良解ではありません")
     except Exception as e:
@@ -202,6 +208,14 @@ def start_server_listener():
             server_socket.close()
             print("サーバーソケットを閉じました")
 
+def print_help():
+    print("\n利用可能なコマンド：")
+    print("  submit: 現時点の最良解を競技サーバーに提出する。")
+    print("  status: 現時点の最良解のペア数と手数を表示する。")
+    print("  help  : この説明を表示する。")
+    print("  exit  : プログラムを終了する。")
+
+# ユーザーからの入力を担当するメイン関数
 def main() -> None:
     global server_socket, match_info, best_solution
     
@@ -219,31 +233,37 @@ def main() -> None:
     listener_thread = threading.Thread(target=start_server_listener, daemon=True)
     listener_thread.start()
 
+    print_help()
+    print("クライアントから解の受信を待機中...")
     while True:
-        # 新しい最良解が見つかるまで待機
-        new_best_solution_event.wait() 
-        
-        # イベントをクリアして次の通知を待てるようにする
-        new_best_solution_event.clear()
-
-        with lock:
-            # 提出中にbest_solutionが更新されないようにディープコピーする
-            solution_for_submission = copy.deepcopy(best_solution)
-
-        while True:
-            try:
-                user_input = input("この解を提出しますか？ (y/n): ").lower()
-                if user_input in ['y', 'yes']:
+        try:
+            # ユーザーからのコマンド入力を待つ
+            user_input = input("\nコマンド > ").lower().strip()
+            match user_input:
+                case "submit":
+                    if best_solution is None:
+                        print("\n最良解はまだ受信されていません")
+                        continue
+                    # 提出中にbest_solutionが更新されないようにディープコピー
+                    solution_for_submission = copy.deepcopy(best_solution)
+                
                     submit_to_official_server(solution_for_submission)
+                case "status":
+                    with lock:
+                        if best_solution is None:
+                            print("\n最良解はまだ受信されていません")
+                        else:
+                            print(f"\n現在の最良解：ペア数={best_pair_count}、手数={best_ops_count}")
+                case "help":
+                    print_help()
+                case "exit":
+                    print("\nプログラムを終了します...")
                     break
-                elif user_input in ['n', 'no']:
-                    print("提出キャンセル。次の解を待機します...")
-                    break
-                else:
-                    print("'y'か'n'を入力してください")
-            except EOFError: # Ctrl+Dなどで入力が終わった場合
-                print("\nプログラムを終了...")
-                return
+                case _:
+                    print("\n不明なコマンドです。'help' コマンドで利用可能なコマンドを確認してください。")
+        except EOFError: # Ctrl+Dなどで入力が終わった場合
+            print("\nプログラムを終了...")
+            return
 
 if __name__ == "__main__":
     main()
