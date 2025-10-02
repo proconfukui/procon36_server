@@ -1,7 +1,7 @@
 import socket
 import json
-import time
-import random
+import os
+import subprocess
 from typing import Dict, Any
 
 # サーバーPCのIPアドレスとポート
@@ -9,30 +9,56 @@ from typing import Dict, Any
 SERVER_HOST: str = "192.168.11.32"  # サーバーの実際のIPアドレス
 SERVER_PORT: int = 8888
 
+# ソルバーで必要なファイルのパス
+PROBLEM_FILE_PATH: str = "testcase/problem.json"
+ANSWER_FILE_PATH: str = "testcase/answer.json"
+WEIGHTS_FILE_PATH: str = "testcase/weigths.txt"
+INPUT_PROBLEM_FILE_PATH: str = "./bin/input_problem.exe"
+MAIN_FILE_PATH: str = "./bin/main.exe"
+CREATE_ANSWER_JSON_FILE_PATH: str = "./bin/create_answer_json.exe"
+
+# ソルバーを実行して解を生成する
 def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    計算アルゴリズムを実行して解を生成するダミー関数。
-    TODO: この関数を、実際の計算プログラムを呼び出して
-          その標準出力を受け取る処理に置き換える。
-    """
     print("ソルバーを実行中...")
 
-    # 計算に時間がかかったと仮定
-    time.sleep(5)
-    
-    # ダミーの解を生成 (ペア数と回転数はランダム)
-    num_pairs: int = random.randint(5, 10)
-    num_rotations: int = random.randint(50, 100)
+    # testcaseディレクトリがなければ作成
+    os.makedirs("testcase", exist_ok=True)
 
-    solution: Dict[str, Any] = {
-        "pair_count": num_pairs, # 解の比較用。サーバー側で取り除かれる
-        "ops": [
-            {"x": x, "y": y, "n": n}
-            for x, y, n in zip([0] * num_rotations, [0] * num_rotations, [2] * num_rotations)
-        ]
-    }
-    print(f"ソルバー実行完了（ペア数：{num_pairs}、手数：{num_rotations}）")
-    return solution
+    try:
+        with open(PROBLEM_FILE_PATH, 'w') as f:
+            json.dump(match_info, f, indent=4)
+        print(f"{PROBLEM_FILE_PATH} に試合情報を書き込み成功")
+
+        # 一連のコマンドを実行
+        command = f"{INPUT_PROBLEM_FILE_PATH} {PROBLEM_FILE_PATH} {WEIGHTS_FILE_PATH} 1 | {MAIN_FILE_PATH} | {CREATE_ANSWER_JSON_FILE_PATH} {ANSWER_FILE_PATH}"
+        print(f"コマンドを実行：{command}")
+        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        print("コマンドの実行完了")
+
+        # 標準出力や標準エラー出力を表示 (デバッグ用)
+        if result.stdout:
+            print("ソルバーの標準出力：", result.stdout)
+        if result.stderr:
+            print("ソルバーのエラー出力：", result.stderr)
+
+        # 結果ファイルを読み込む
+        print(f"{ANSWER_FILE_PATH} から解を読み込み...")
+        with open(ANSWER_FILE_PATH, 'r') as f:
+            solution = json.load(f)
+        
+        print(f"読み込み成功。ソルバー実行完了")
+        return solution
+
+    except FileNotFoundError:
+        print(f"エラー：ソルバーの実行ファイルが見つかりません")
+        return None
+    except subprocess.CalledProcessError as e:
+        print(f"エラー：コマンドが終了コード{e.returncode}で失敗")
+        print("ソルバーのエラー出力：", e.stderr)
+        return None
+    except Exception as e:
+        print(f"エラー：{e}")
+        return None
 
 def main() -> None:
     try:
@@ -45,7 +71,7 @@ def main() -> None:
             # サーバーから問題を受け取る
             data: bytes = b""
             while True:
-                chunk: bytes = s.recv(4096)
+                chunk: bytes = s.recv(8192)
                 if not chunk:
                     break
                 data += chunk
@@ -55,13 +81,20 @@ def main() -> None:
             match_info: Dict[str, Any] = json.loads(data.decode("utf-8"))
             print("問題受信に成功")
 
-            # ソルバーを実行
-            solution: Dict[str, Any] = run_solver(match_info)
-            
-            # 解をサーバーに送信
-            print("解をサーバーに送信中...")
-            s.sendall(json.dumps(solution).encode("utf-8"))
-            print("解をサーバーに送信完了")
+            while True:
+                # ソルバーを実行
+                solution: Dict[str, Any] = run_solver(match_info)
+
+                # 解をサーバーに送信
+                if solution:
+                    print("解をサーバーに送信中...")
+                    # ソケットが閉じられている可能性があるので、新しい接続を作成する
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sender_socket:
+                        sender_socket.connect((SERVER_HOST, SERVER_PORT))
+                        sender_socket.sendall(json.dumps(solution).encode('utf-8'))
+                    print("解をサーバーに送信完了")
+                else:
+                    print("解が生成されませんでした。再試行します。")
     except Exception as e:
         print(f"エラー：{e}")
 
