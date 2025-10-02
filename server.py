@@ -34,12 +34,15 @@ def get_better_solution(sol1: Optional[Dict[str, Any]], sol2: Optional[Dict[str,
     sol2_pair_count: int = 0
     if "pair_count" in sol2:
         sol2.pop("pair_count")
+
+    print(f"比較中: 解1のペア数={sol1_pair_count}, 解2のペア数={sol2_pair_count}")
     if sol1_pair_count > sol2_pair_count:
         return (sol1, sol1_pair_count)
     if sol1_pair_count < sol2_pair_count:
         return (sol2, sol2_pair_count)
 
     # ペア数が同じ場合は手数を比較
+    print(f"比較中: 解1の手数={len(sol1.get("ops", []))}, 解2の手数={len(sol2.get("ops", []))}")
     if len(sol1.get("ops", [])) < len(sol2.get("ops", [])):
         return (sol1, sol1_pair_count)
 
@@ -83,11 +86,9 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
                 pair_count: int = 0
                 if isinstance(result, tuple):
                     new_best, pair_count = result
-                    print(f"pair_count: {pair_count}")
                 else:
                     new_best, pair_count = result, 0
                 ops_count = len(new_best.get('ops', [])) if new_best else 0
-                print(f"pair_count: {pair_count}")
 
                 if new_best is not best_solution:
                     best_solution = new_best
