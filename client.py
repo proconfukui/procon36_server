@@ -12,7 +12,7 @@ SERVER_PORT: int = 8888
 # ソルバーで必要なファイルのパス
 PROBLEM_FILE_PATH: str = "testcase/problem.json"
 ANSWER_FILE_PATH: str = "testcase/answer.json"
-WEIGHTS_FILE_PATH: str = "testcase/weigths.txt"
+WEIGHTS_FILE_PATH: str = "testcase/weights.txt"
 WEIGHTS_FILE_LINE: int = 1 # 使用する重みの行番号（1始まり）
 INPUT_PROBLEM_FILE_PATH: str = "./bin/input_problem.exe"
 MAIN_FILE_PATH: str = "./bin/main.exe"
