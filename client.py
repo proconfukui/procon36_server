@@ -13,6 +13,7 @@ SERVER_PORT: int = 8888
 PROBLEM_FILE_PATH: str = "testcase/problem.json"
 ANSWER_FILE_PATH: str = "testcase/answer.json"
 WEIGHTS_FILE_PATH: str = "testcase/weigths.txt"
+WEIGHTS_FILE_LINE: int = 1 # 使用する重みの行番号（1始まり）
 INPUT_PROBLEM_FILE_PATH: str = "./bin/input_problem.exe"
 MAIN_FILE_PATH: str = "./bin/main.exe"
 CREATE_ANSWER_JSON_FILE_PATH: str = "./bin/create_answer_json.exe"
@@ -30,7 +31,7 @@ def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
         print(f"{PROBLEM_FILE_PATH} に試合情報を書き込み成功")
 
         # 一連のコマンドを実行
-        command = f"{INPUT_PROBLEM_FILE_PATH} {PROBLEM_FILE_PATH} {WEIGHTS_FILE_PATH} 1 | {MAIN_FILE_PATH} | {CREATE_ANSWER_JSON_FILE_PATH} {ANSWER_FILE_PATH}"
+        command = f"{INPUT_PROBLEM_FILE_PATH} {PROBLEM_FILE_PATH} {WEIGHTS_FILE_PATH} {WEIGHTS_FILE_LINE} | {MAIN_FILE_PATH} | {CREATE_ANSWER_JSON_FILE_PATH} {ANSWER_FILE_PATH}"
         print(f"コマンドを実行：{command}")
         result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
         print("コマンドの実行完了")
