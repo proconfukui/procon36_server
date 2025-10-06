@@ -10,13 +10,14 @@ SERVER_HOST: str = "192.168.11.32"  # サーバーの実際のIPアドレス
 SERVER_PORT: int = 8888
 
 # ソルバーで必要なファイルのパス
-PROBLEM_FILE_PATH: str = "testcase/problem.json"
-ANSWER_FILE_PATH: str = "testcase/answer.json"
-WEIGHTS_FILE_PATH: str = "testcase/weights.txt"
-WEIGHTS_FILE_LINE: int = 1 # 使用する重みの行番号（1始まり）
-INPUT_PROBLEM_FILE_PATH: str = "./bin/input_problem.exe"
-MAIN_FILE_PATH: str = "./bin/main.exe"
-CREATE_ANSWER_JSON_FILE_PATH: str = "./bin/create_answer_json.exe"
+PROBLEM_PATH: str = "testcase/problem.json"
+ANSWER_PATH: str = "testcase/answer.json"
+WEIGHT_PATH: str = "testcase/weights.txt"
+WEIGHT_START_LINE: int = 1 # 使用する重みの行番号（1始まり）
+INPUT_PROBLEM_PATH: str = "./bin/input_problem.exe"
+MAIN_SHELL_PATH: str = "./main.sh"
+MAIN_CPP_PATH: str = "./bin/main.exe"
+CREATE_ANSWER_JSON_PATH: str = "./bin/create_answer_json.exe"
 
 # ソルバーを実行して解を生成する
 def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -26,12 +27,12 @@ def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
     os.makedirs("testcase", exist_ok=True)
 
     try:
-        with open(PROBLEM_FILE_PATH, 'w') as f:
+        with open(PROBLEM_PATH, 'w') as f:
             json.dump(match_info, f, indent=4)
-        print(f"{PROBLEM_FILE_PATH} に試合情報を書き込み成功")
+        print(f"{PROBLEM_PATH} に試合情報を書き込み成功")
 
         # 一連のコマンドを実行
-        command = f"{INPUT_PROBLEM_FILE_PATH} {PROBLEM_FILE_PATH} {WEIGHTS_FILE_PATH} {WEIGHTS_FILE_LINE} | {MAIN_FILE_PATH} | {CREATE_ANSWER_JSON_FILE_PATH} {ANSWER_FILE_PATH}"
+        command = f"{MAIN_SHELL_PATH} {PROBLEM_PATH} {WEIGHT_PATH} {WEIGHT_START_LINE} {MAIN_CPP_PATH} | {CREATE_ANSWER_JSON_PATH} {ANSWER_PATH}"
         print(f"コマンドを実行：{command}")
         result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
         print("コマンドの実行完了")
@@ -43,8 +44,8 @@ def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
             print("ソルバーのエラー出力：", result.stderr)
 
         # 結果ファイルを読み込む
-        print(f"{ANSWER_FILE_PATH} から解を読み込み...")
-        with open(ANSWER_FILE_PATH, 'r') as f:
+        print(f"{ANSWER_PATH} から解を読み込み...")
+        with open(ANSWER_PATH, 'r') as f:
             solution = json.load(f)
         
         print(f"読み込み成功。ソルバー実行完了")
@@ -52,14 +53,14 @@ def run_solver(match_info: Dict[str, Any]) -> Dict[str, Any]:
 
     except FileNotFoundError:
         print(f"エラー：ソルバーの実行ファイルが見つかりません")
-        return None
+        return {}
     except subprocess.CalledProcessError as e:
         print(f"エラー：コマンドが終了コード{e.returncode}で失敗")
         print("ソルバーのエラー出力：", e.stderr)
-        return None
+        return {}
     except Exception as e:
         print(f"エラー：{e}")
-        return None
+        return {}
 
 def main() -> None:
     try:
